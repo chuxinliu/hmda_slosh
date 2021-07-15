@@ -28,6 +28,48 @@ replace denied = 1 if !mi(denial_reason_1)
 replace denied = 1 if !mi(denial_reason_2)
 replace denied = 1 if !mi(denial_reason_3)
 
+* collapse for tract-year level anaysis
+preserve
+gen i = _n
+gen county_ctn = county*1000*1000 + ctn
+preserve 
+collapse (mean) loan_ed ln_loan_amount ln_applicant_income denial_* denied c*high0 int* (count) i, by(year county_ctn)
+save "$root\collapsed_mean_count.dta", replace
+restore 
+collapse (sd) loan_ed ln_loan_amount ln_applicant_income denial_* denied c*high0 int*, by(year county_ctn)
+rename * *_sd
+rename year_sd year
+rename county_ctn_sd county_ctn 
+save "$root\collapsed_sd.dta", replace
+merge 1:1 year county_ctn using "$root\collapsed_mean_count.dta"
+levelsof year, local(yearn)
+levelsof county_ctn, local(county_ctnn)
+foreach i of local yearn{
+foreach j of local county_ctnn{
+su i if year == `i' & county_ctn == `j'
+if r(N)==0{
+insobs 1
+local end = _N 
+replace year = `i' in `end'
+replace county_ctn = `j' in `end'
+replace i = 0 in `end'
+su intptlat if year == `i' & county_ctn == `j'
+replace intptlat = r(mean) in `end'
+su intptlon if year == `i' & county_ctn == `j'
+replace intptlon = r(mean) in `end'
+}
+}
+}
+*drop census tracks that maximum number of loans in a year is smaller than 10
+levelsof county_ctn, local(county_ctnn)
+foreach j of local county_ctnn{
+su i if county_ctn == `j'
+if r(max) < 10 {
+drop if county_ctn == `j'
+}
+}
+restore 
+
 *****************************************************************************
 /* summary statistics */
 su loan_ed *000s ln* c*high0
